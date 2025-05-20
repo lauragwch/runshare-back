@@ -81,9 +81,38 @@ const getProfile = async (req, res) => {
   }
 };
 
+// Contrôleur pour mettre à jour le rôle d'un utilisateur (admin seulement)
+const updateUserRole = async (req, res) => {
+  try {
+    const { userId, role } = req.body;
+    const adminId = req.user.id_user;
+    
+    // Vérifier que les données requises sont présentes
+    if (!userId || !role) {
+      return res.status(400).json({ message: 'ID utilisateur et rôle requis' });
+    }
+    
+    // Appel du service pour mettre à jour le rôle
+    const result = await authService.updateUserRole(userId, role, adminId);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Erreur dans updateUserRole :', error.message);
+    
+    if (error.message.includes('droits')) {
+      return res.status(403).json({ message: error.message });
+    }
+    
+    res.status(400).json({ message: error.message || 'Erreur lors de la mise à jour du rôle' });
+  }
+};
+
+
 // Exportation des fonctions
 module.exports = {
   register,
   login,
-  getProfile
+  getProfile,
+  updateUserRole
 };
