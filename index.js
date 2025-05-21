@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./swagger.json');
 
 // Chargement des variables d'environnement
 dotenv.config();
@@ -17,6 +19,13 @@ app.use(express.urlencoded({ extended: true }));
 
 // Servir les images statiques
 app.use('/images/profiles', express.static(path.join(__dirname, 'images/profiles')));
+
+// Configuration de Swagger
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: "RunShare API Documentation"
+}));
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -37,4 +46,5 @@ app.use((err, req, res, next) => {
 // Démarrage du serveur
 app.listen(PORT, () => {
   console.log(`Serveur démarré sur le port ${PORT}`);
+  console.log(`Documentation API disponible sur http://localhost:${PORT}/api-docs`);
 });

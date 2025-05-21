@@ -1,0 +1,699 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "RunShare API",
+    "description": "API pour l'application RunShare - Trouvez des partenaires de course à pied",
+    "version": "1.0"
+  },
+  "produces": ["application/json"],
+  "host": "localhost:3000",
+  "basePath": "/api",
+  "securityDefinitions": {
+    "Bearer": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header",
+      "description": "Entrer le token JWT sous la forme 'Bearer token'"
+    }
+  },
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Authentification"],
+        "summary": "Connecte un utilisateur",
+        "description": "Authentifie un utilisateur et renvoie un token JWT avec ses informations.",
+        "parameters": [
+          {
+            "name": "credentials",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "email": { "type": "string", "description": "Adresse email de l'utilisateur" },
+                "password": { "type": "string", "description": "Mot de passe de l'utilisateur" }
+              },
+              "required": ["email", "password"],
+              "example": {
+                "email": "coureur@exemple.com",
+                "password": "Password123!"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Connexion réussie",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "token": { "type": "string", "description": "Token JWT" },
+                "user": { 
+                  "type": "object",
+                  "properties": {
+                    "id_user": { "type": "integer", "description": "ID de l'utilisateur" },
+                    "username": { "type": "string", "description": "Nom d'utilisateur" },
+                    "email": { "type": "string", "description": "Email" },
+                    "city": { "type": "string", "description": "Ville" },
+                    "level": { "type": "string", "description": "Niveau de course" },
+                    "bio": { "type": "string", "description": "Biographie" },
+                    "profile_picture": { "type": "string", "description": "URL de la photo de profil" },
+                    "role": { "type": "string", "description": "Rôle (user ou admin)" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email ou mot de passe manquant",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "401": {
+            "description": "Identifiants invalides",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Authentification"],
+        "summary": "Inscrit un nouvel utilisateur",
+        "description": "Crée un compte utilisateur et renvoie un token JWT.",
+        "parameters": [
+          {
+            "name": "userData",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "username": { "type": "string", "description": "Nom d'utilisateur" },
+                "email": { "type": "string", "description": "Adresse email" },
+                "password": { "type": "string", "description": "Mot de passe" },
+                "city": { "type": "string", "description": "Ville" },
+                "level": { "type": "string", "description": "Niveau de course", "enum": ["débutant", "intermédiaire", "avancé"] },
+                "bio": { "type": "string", "description": "Biographie" }
+              },
+              "required": ["username", "email", "password"],
+              "example": {
+                "username": "johncoureur",
+                "email": "john@exemple.com",
+                "password": "Password123!",
+                "city": "Paris",
+                "level": "intermédiaire",
+                "bio": "Passionné de course depuis 2 ans"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Utilisateur créé",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": { "type": "string", "example": "Utilisateur créé avec succès" },
+                "token": { "type": "string", "description": "Token JWT" },
+                "user": {
+                  "type": "object",
+                  "properties": {
+                    "id_user": { "type": "integer" },
+                    "username": { "type": "string" },
+                    "email": { "type": "string" },
+                    "role": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email déjà utilisé ou données invalides",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/auth/profile": {
+      "get": {
+        "tags": ["Authentification"],
+        "summary": "Récupère le profil de l'utilisateur connecté",
+        "description": "Renvoie les détails du profil de l'utilisateur associé au token JWT.",
+        "security": [
+          { "Bearer": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profil récupéré avec succès",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id_user": { "type": "integer" },
+                "username": { "type": "string" },
+                "email": { "type": "string" },
+                "city": { "type": "string" },
+                "level": { "type": "string" },
+                "bio": { "type": "string" },
+                "profile_picture": { "type": "string" },
+                "role": { "type": "string" },
+                "created_at": { "type": "string", "format": "date-time" }
+              }
+            }
+          },
+          "401": {
+            "description": "Non authentifié",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "404": {
+            "description": "Utilisateur non trouvé",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/auth/role": {
+      "put": {
+        "tags": ["Administration"],
+        "summary": "Modifie le rôle d'un utilisateur",
+        "description": "Permet aux administrateurs de modifier le rôle d'un utilisateur",
+        "security": [
+          { "Bearer": [] }
+        ],
+        "parameters": [
+          {
+            "name": "roleData",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "userId": { "type": "integer", "description": "ID de l'utilisateur à modifier" },
+                "role": { "type": "string", "description": "Nouveau rôle", "enum": ["user", "admin"] }
+              },
+              "required": ["userId", "role"],
+              "example": {
+                "userId": 2,
+                "role": "admin"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rôle modifié avec succès",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": { "type": "string" },
+                "userId": { "type": "integer" },
+                "newRole": { "type": "string" }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "401": {
+            "description": "Non authentifié",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "403": {
+            "description": "Non autorisé (non admin)",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "tags": ["Utilisateurs"],
+        "summary": "Récupère un profil utilisateur public",
+        "description": "Récupère les informations publiques d'un utilisateur par son ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "ID de l'utilisateur"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profil récupéré avec succès",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id_user": { "type": "integer" },
+                "username": { "type": "string" },
+                "city": { "type": "string" },
+                "level": { "type": "string" },
+                "bio": { "type": "string" },
+                "profile_picture": { "type": "string" },
+                "averageRating": { "type": "number" },
+                "ratings": { "type": "array", "items": { "type": "object" } },
+                "organizedRuns": { "type": "array", "items": { "type": "object" } },
+                "participatedRuns": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          },
+          "404": {
+            "description": "Utilisateur non trouvé",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/users/profile": {
+      "put": {
+        "tags": ["Utilisateurs"],
+        "summary": "Met à jour le profil utilisateur",
+        "description": "Permet à l'utilisateur connecté de mettre à jour son profil",
+        "security": [
+          { "Bearer": [] }
+        ],
+        "parameters": [
+          {
+            "name": "profileData",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "username": { "type": "string" },
+                "city": { "type": "string" },
+                "level": { "type": "string", "enum": ["débutant", "intermédiaire", "avancé"] },
+                "bio": { "type": "string" },
+                "password": { "type": "string", "description": "Nouveau mot de passe (optionnel)" }
+              },
+              "example": {
+                "username": "nouveau_pseudo",
+                "city": "Lyon",
+                "level": "avancé",
+                "bio": "Ma nouvelle biographie"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profil mis à jour avec succès",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": { "type": "string", "example": "Profil mis à jour avec succès" }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "401": {
+            "description": "Non authentifié",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/users/profile/picture": {
+      "post": {
+        "tags": ["Utilisateurs"],
+        "summary": "Met à jour la photo de profil",
+        "description": "Télécharge et associe une nouvelle photo de profil à l'utilisateur",
+        "security": [
+          { "Bearer": [] }
+        ],
+        "consumes": ["multipart/form-data"],
+        "parameters": [
+          {
+            "name": "profile_picture",
+            "in": "formData",
+            "required": true,
+            "type": "file",
+            "description": "Fichier image (jpg, png, gif)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Photo de profil mise à jour avec succès",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": { "type": "string" },
+                "profilePicture": { "type": "string", "description": "Chemin vers la nouvelle image" }
+              }
+            }
+          },
+          "400": {
+            "description": "Fichier invalide",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "401": {
+            "description": "Non authentifié",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/users/rate": {
+      "post": {
+        "tags": ["Utilisateurs"],
+        "summary": "Évalue un utilisateur",
+        "description": "Ajoute une évaluation (note et commentaire) à un autre utilisateur",
+        "security": [
+          { "Bearer": [] }
+        ],
+        "parameters": [
+          {
+            "name": "ratingData",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id_to_user": { "type": "integer", "description": "ID de l'utilisateur à évaluer" },
+                "id_run": { "type": "integer", "description": "ID de la course associée (optionnel)" },
+                "rating": { "type": "integer", "description": "Note de 1 à 5", "minimum": 1, "maximum": 5 },
+                "comment": { "type": "string", "description": "Commentaire" }
+              },
+              "required": ["id_to_user", "rating"],
+              "example": {
+                "id_to_user": 2,
+                "id_run": 5,
+                "rating": 4,
+                "comment": "Excellent partenaire de course !"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Évaluation ajoutée avec succès",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": { "type": "string" },
+                "id_rating": { "type": "integer" }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "401": {
+            "description": "Non authentifié",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/runs": {
+      "get": {
+        "tags": ["Courses"],
+        "summary": "Récupère la liste des courses",
+        "description": "Récupère toutes les courses avec possibilité de filtrage",
+        "parameters": [
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "description": "Filtrer par ville"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "date",
+            "description": "Filtrer par date (YYYY-MM-DD)"
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "enum": ["débutant", "intermédiaire", "avancé"],
+            "description": "Filtrer par niveau"
+          },
+          {
+            "name": "distance",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "description": "Filtrer par distance (ex: '5-10' pour 5 à 10km)"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "description": "Recherche dans le titre/description/lieu"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste des courses",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id_run": { "type": "integer" },
+                  "title": { "type": "string" },
+                  "description": { "type": "string" },
+                  "date": { "type": "string", "format": "date-time" },
+                  "location": { "type": "string" },
+                  "distance": { "type": "number" },
+                  "level": { "type": "string" },
+                  "is_private": { "type": "boolean" },
+                  "id_organizer": { "type": "integer" },
+                  "organizer_name": { "type": "string" },
+                  "organizer_picture": { "type": "string" },
+                  "participants_count": { "type": "integer" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Courses"],
+        "summary": "Crée une nouvelle course",
+        "description": "Permet à un utilisateur connecté de créer une nouvelle course",
+        "security": [
+          { "Bearer": [] }
+        ],
+        "parameters": [
+          {
+            "name": "runData",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string", "description": "Titre de la course" },
+                "description": { "type": "string", "description": "Description détaillée" },
+                "date": { "type": "string", "format": "date-time", "description": "Date et heure de la course" },
+                "location": { "type": "string", "description": "Lieu de rendez-vous" },
+                "distance": { "type": "number", "description": "Distance en kilomètres" },
+                "level": { "type": "string", "enum": ["débutant", "intermédiaire", "avancé"] },
+                "is_private": { "type": "boolean", "description": "Course privée ou publique" }
+              },
+              "required": ["title", "date", "location"],
+              "example": {
+                "title": "Sortie matinale au parc",
+                "description": "Course tranquille de 5km autour du lac",
+                "date": "2023-08-15T08:00:00Z",
+                "location": "Parc de la Tête d'Or, Lyon",
+                "distance": 5,
+                "level": "débutant",
+                "is_private": false
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Course créée avec succès",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": { "type": "string" },
+                "id_run": { "type": "integer" }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "401": {
+            "description": "Non authentifié",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/runs/{id}": {
+      "get": {
+        "tags": ["Courses"],
+        "summary": "Récupère les détails d'une course",
+        "description": "Récupère toutes les informations sur une course spécifique",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "ID de la course"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Détails de la course",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "id_run": { "type": "integer" },
+                "title": { "type": "string" },
+                "description": { "type": "string" },
+                "date": { "type": "string", "format": "date-time" },
+                "location": { "type": "string" },
+                "distance": { "type": "number" },
+                "level": { "type": "string" },
+                "is_private": { "type": "boolean" },
+                "id_organizer": { "type": "integer" },
+                "organizer_name": { "type": "string" },
+                "organizer_picture": { "type": "string" },
+                "participants": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id_user": { "type": "integer" },
+                      "username": { "type": "string" },
+                      "profile_picture": { "type": "string" },
+                      "status": { "type": "string" },
+                      "joined_at": { "type": "string", "format": "date-time" }
+                    }
+                  }
+                },
+                "ratings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "rating": { "type": "integer" },
+                      "comment": { "type": "string" },
+                      "created_at": { "type": "string", "format": "date-time" },
+                      "from_id": { "type": "integer" },
+                      "from_username": { "type": "string" },
+                      "to_id": { "type": "integer" },
+                      "to_username": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Course non trouvée",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "403": {
+            "description": "Pas accès à cette course privée",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/runs/{id}/join": {
+      "post": {
+        "tags": ["Courses"],
+        "summary": "Rejoindre une course",
+        "description": "Permet à l'utilisateur connecté de rejoindre une course",
+        "security": [
+          { "Bearer": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "ID de la course à rejoindre"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "A rejoint la course avec succès",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": { "type": "string", "example": "Vous avez rejoint cette course avec succès" }
+              }
+            }
+          },
+          "400": {
+            "description": "Déjà inscrit ou autre erreur",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "401": {
+            "description": "Non authentifié",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "404": {
+            "description": "Course non trouvée",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/runs/{id}/leave": {
+      "delete": {
+        "tags": ["Courses"],
+        "summary": "Quitter une course",
+        "description": "Permet à l'utilisateur connecté de quitter une course",
+        "security": [
+          { "Bearer": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "ID de la course à quitter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A quitté la course avec succès",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": { "type": "string", "example": "Vous avez quitté cette course avec succès" }
+              }
+            }
+          },
+          "400": {
+            "description": "Non inscrit ou organisateur",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "401": {
+            "description": "Non authentifié",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "404": {
+            "description": "Course non trouvée",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    }
+  }
+}
