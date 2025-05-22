@@ -10,10 +10,10 @@ const createRun = async (req, res) => {
       return res.status(400).json({ message: 'Titre, date et lieu sont requis' });
     }
     
-    const id_organizer = req.user.id_user;
+    const userId = req.user.id_user;
     
     // Appel du service pour créer la course
-    const result = await runService.createRun(id_organizer, { 
+    const result = await runService.createRun(userId, { 
       title, 
       description, 
       date, 
@@ -104,10 +104,34 @@ const leaveRun = async (req, res) => {
   }
 };
 
+// Évaluer une course
+const rateRun = async (req, res) => {
+  try {
+    const runId = req.params.id;
+    const userId = req.user.id_user;
+    const { rating, comment } = req.body;
+    
+    // Vérifier que la note est entre 1 et 5
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: 'La note doit être entre 1 et 5' });
+    }
+    
+    // Appel du service pour évaluer la course
+    const result = await runService.rateRun(runId, userId, rating, comment);
+    
+    res.status(201).json(result);
+    
+  } catch (error) {
+    console.error('Erreur dans rateRun :', error.message);
+    res.status(400).json({ message: error.message || 'Erreur lors de l\'évaluation de la course' });
+  }
+};
+
 module.exports = {
   createRun,
   getRuns,
   getRunById,
   joinRun,
-  leaveRun
+  leaveRun,
+  rateRun
 };

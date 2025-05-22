@@ -104,7 +104,7 @@ const getProfile = async (userId) => {
   return users[0];
 };
 
-// Nouveau service pour mettre à jour le rôle d'un utilisateur (réservé aux admins)
+// Service pour mettre à jour le rôle d'un utilisateur (réservé aux admins)
 const updateUserRole = async (targetUserId, newRole, adminId) => {
   // Vérifier que l'utilisateur qui demande le changement est un admin
   const [admins] = await db.query('SELECT role FROM users WHERE id_user = ?', [adminId]);
@@ -139,5 +139,5 @@ module.exports = {
   register,
   login,
   getProfile,
-  updateUserRole  // Exporter la nouvelle fonction
+  updateUserRole
 };

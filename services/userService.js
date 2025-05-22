@@ -1,4 +1,5 @@
 const db = require('../config/bdd');
+const bcrypt = require('bcryptjs');
 
 // Récupérer le profil public d'un utilisateur
 const getUserProfile = async (userId) => {
@@ -17,10 +18,10 @@ const getUserProfile = async (userId) => {
   // Récupérer les évaluations de l'utilisateur
   const [ratings] = await db.query(
     `SELECT r.id_rating, r.rating, r.comment, r.created_at, 
-            u.id_user, u.username, u.profile_picture
+            u.id_user as from_user_id, u.username as from_username, u.profile_picture as from_profile_picture
      FROM ratings r
-     JOIN users u ON r.id_from_user = u.id_user
-     WHERE r.id_to_user = ?
+     JOIN users u ON r.id_user_donne = u.id_user
+     WHERE r.id_user_recu = ?
      ORDER BY r.created_at DESC`,
     [userId]
   );
@@ -36,7 +37,7 @@ const getUserProfile = async (userId) => {
   const [organizedRuns] = await db.query(
     `SELECT id_run, title, date, location, distance, level
      FROM runs
-     WHERE id_organizer = ?
+     WHERE id_user = ?
      ORDER BY date DESC
      LIMIT 5`,
     [userId]
@@ -47,8 +48,8 @@ const getUserProfile = async (userId) => {
     `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level,
             u.id_user as organizer_id, u.username as organizer_name
      FROM runs r
-     JOIN participants p ON r.id_run = p.id_run
-     JOIN users u ON r.id_organizer = u.id_user
+     JOIN participer p ON r.id_run = p.id_run
+     JOIN users u ON r.id_user = u.id_user
      WHERE p.id_user = ? AND p.status = 'confirmed'
      ORDER BY r.date DESC
      LIMIT 5`,
@@ -104,9 +105,16 @@ const updateProfile = async (userId, userData) => {
     values.push(bio);
   }
   
-  // S'il n'y a rien à mettre à jour
+  // S'il n'y a rien à mettre à jour et pas de mot de passe
   if (updateFields.length === 0 && !password) {
     throw new Error('Aucune donnée à mettre à jour');
+  }
+  
+  // Gérer le mot de passe séparément si fourni
+  if (password) {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    updateFields.push('password = ?');
+    values.push(hashedPassword);
   }
   
   // Ajouter l'ID utilisateur à la fin du tableau de valeurs
@@ -137,7 +145,7 @@ const updateProfilePicture = async (userId, profilePicturePath) => {
 };
 
 // Ajouter une évaluation à un utilisateur
-const rateUser = async (fromUserId, toUserId, runId, rating, comment) => {
+const rateUser = async (fromUserId, toUserId, rating, comment) => {
   // Vérifier que l'utilisateur ne s'auto-évalue pas
   if (fromUserId === parseInt(toUserId)) {
     throw new Error('Vous ne pouvez pas vous auto-évaluer');
@@ -148,16 +156,35 @@ const rateUser = async (fromUserId, toUserId, runId, rating, comment) => {
     throw new Error('La note doit être entre 1 et 5');
   }
   
-  // Insérer l'évaluation
-  const [result] = await db.query(
-    'INSERT INTO ratings (id_from_user, id_to_user, id_run, rating, comment) VALUES (?, ?, ?, ?, ?)',
-    [fromUserId, toUserId, runId || null, rating, comment]
+  // Vérifier si une évaluation existe déjà
+  const [existingRatings] = await db.query(
+    'SELECT id_rating FROM ratings WHERE id_user_donne = ? AND id_user_recu = ?',
+    [fromUserId, toUserId]
   );
   
-  return {
-    message: 'Évaluation ajoutée avec succès',
-    id_rating: result.insertId
-  };
+  if (existingRatings.length > 0) {
+    // Mettre à jour l'évaluation existante
+    await db.query(
+      'UPDATE ratings SET rating = ?, comment = ?, created_at = NOW() WHERE id_user_donne = ? AND id_user_recu = ?',
+      [rating, comment, fromUserId, toUserId]
+    );
+    
+    return {
+      message: 'Évaluation mise à jour avec succès',
+      id_rating: existingRatings[0].id_rating
+    };
+  } else {
+    // Insérer une nouvelle évaluation
+    const [result] = await db.query(
+      'INSERT INTO ratings (rating, comment, id_user_recu, id_user_donne) VALUES (?, ?, ?, ?)',
+      [rating, comment, toUserId, fromUserId]
+    );
+    
+    return {
+      message: 'Évaluation ajoutée avec succès',
+      id_rating: result.insertId
+    };
+  }
 };
 
 module.exports = {

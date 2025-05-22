@@ -1,7 +1,7 @@
 const db = require('../config/bdd');
 
 // Créer une nouvelle course
-const createRun = async (organizerId, runData) => {
+const createRun = async (userId, runData) => {
   const { title, description, date, location, distance, level, is_private } = runData;
   
   // Vérifier la date (pas dans le passé)
@@ -11,23 +11,27 @@ const createRun = async (organizerId, runData) => {
   if (runDate < now) {
     throw new Error('La date de la course doit être future');
   }
+
+  // Générer un ID unique pour la course
+  const [maxIdResult] = await db.query('SELECT COALESCE(MAX(id_run), 0) + 1 as next_id FROM runs');
+  const newRunId = maxIdResult[0].next_id;
   
-  // Insérer la course
-  const [result] = await db.query(
-    `INSERT INTO runs (title, description, date, location, distance, level, is_private, id_organizer)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [title, description, date, location, distance, level, is_private ? 1 : 0, organizerId]
+  // Insérer la course avec l'ID spécifique
+  await db.query(
+    `INSERT INTO runs (id_run, title, description, date, location, distance, level, is_private, id_user)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [newRunId, title, description, date, location, distance, level, is_private ? 1 : 0, userId]
   );
   
   // L'organisateur est automatiquement participant
   await db.query(
-    'INSERT INTO participants (id_user, id_run, status) VALUES (?, ?, "confirmed")',
-    [organizerId, result.insertId]
+    'INSERT INTO participer (id_user, id_run, status) VALUES (?, ?, "confirmed")',
+    [userId, newRunId]
   );
   
   return {
     message: 'Course créée avec succès',
-    id_run: result.insertId
+    id_run: newRunId
   };
 };
 
@@ -37,10 +41,10 @@ const getRuns = async (filters, userId = null) => {
   
   let query = `
     SELECT r.*, u.username as organizer_name, u.profile_picture as organizer_picture,
-           COUNT(p.id_participant) as participants_count
+           COUNT(p.id_user) as participants_count
     FROM runs r
-    JOIN users u ON r.id_organizer = u.id_user
-    LEFT JOIN participants p ON r.id_run = p.id_run AND p.status = 'confirmed'
+    JOIN users u ON r.id_user = u.id_user
+    LEFT JOIN participer p ON r.id_run = p.id_run AND p.status = 'confirmed'
     WHERE 1=1
   `;
   
@@ -102,7 +106,7 @@ const getRunById = async (runId, userId = null) => {
   const [runs] = await db.query(
     `SELECT r.*, u.username as organizer_name, u.profile_picture as organizer_picture
      FROM runs r
-     JOIN users u ON r.id_organizer = u.id_user
+     JOIN users u ON r.id_user = u.id_user
      WHERE r.id_run = ?`,
     [runId]
   );
@@ -114,9 +118,10 @@ const getRunById = async (runId, userId = null) => {
   const run = runs[0];
   
   // Vérifier si c'est une course privée et si l'utilisateur a accès
-  if (run.is_private && (!userId || (userId !== run.id_organizer))) {
+  if (run.is_private && (!userId || (userId !== run.id_user))) {
+    // Si privée, vérifier si l'utilisateur est participant
     const [participation] = await db.query(
-      'SELECT * FROM participants WHERE id_run = ? AND id_user = ?',
+      'SELECT * FROM participer WHERE id_run = ? AND id_user = ?',
       [runId, userId]
     );
     
@@ -128,23 +133,21 @@ const getRunById = async (runId, userId = null) => {
   // Récupérer les participants
   const [participants] = await db.query(
     `SELECT p.status, p.joined_at, u.id_user, u.username, u.profile_picture
-     FROM participants p
+     FROM participer p
      JOIN users u ON p.id_user = u.id_user
      WHERE p.id_run = ?
      ORDER BY p.status, p.joined_at`,
     [runId]
   );
   
-  // Récupérer les commentaires/évaluations liés à cette course
+  // Récupérer les évaluations de cette course
   const [ratings] = await db.query(
-    `SELECT r.rating, r.comment, r.created_at, 
-            u_from.id_user as from_id, u_from.username as from_username, u_from.profile_picture as from_picture,
-            u_to.id_user as to_id, u_to.username as to_username
-     FROM ratings r
-     JOIN users u_from ON r.id_from_user = u_from.id_user
-     JOIN users u_to ON r.id_to_user = u_to.id_user
-     WHERE r.id_run = ?
-     ORDER BY r.created_at DESC`,
+    `SELECT rr.rating, rr.comment, rr.created_at, 
+            u.id_user, u.username, u.profile_picture
+     FROM rating_run rr
+     JOIN users u ON rr.id_user = u.id_user
+     WHERE rr.id_run = ?
+     ORDER BY rr.created_at DESC`,
     [runId]
   );
   
@@ -165,7 +168,7 @@ const joinRun = async (runId, userId) => {
   
   // Vérifier que l'utilisateur n'est pas déjà inscrit
   const [existingParticipations] = await db.query(
-    'SELECT * FROM participants WHERE id_run = ? AND id_user = ?',
+    'SELECT * FROM participer WHERE id_run = ? AND id_user = ? AND status != "cancelled"',
     [runId, userId]
   );
   
@@ -173,11 +176,25 @@ const joinRun = async (runId, userId) => {
     throw new Error('Vous êtes déjà inscrit à cette course');
   }
   
-  // Inscrire l'utilisateur
-  await db.query(
-    'INSERT INTO participants (id_user, id_run, status) VALUES (?, ?, ?)',
-    [userId, runId, 'confirmed'] // Ou 'pending' si vous ajoutez une validation par l'organisateur
+  // Vérifier si l'utilisateur avait déjà une participation annulée
+  const [cancelledParticipations] = await db.query(
+    'SELECT * FROM participer WHERE id_run = ? AND id_user = ? AND status = "cancelled"',
+    [runId, userId]
   );
+  
+  if (cancelledParticipations.length > 0) {
+    // Réactiver la participation
+    await db.query(
+      'UPDATE participer SET status = "pending", joined_at = NOW() WHERE id_run = ? AND id_user = ?',
+      [runId, userId]
+    );
+  } else {
+    // Inscrire l'utilisateur
+    await db.query(
+      'INSERT INTO participer (id_user, id_run, status) VALUES (?, ?, ?)',
+      [userId, runId, 'pending'] // Ou 'confirmed' si pas de validation nécessaire
+    );
+  }
   
   return { message: 'Vous avez rejoint cette course avec succès' };
 };
@@ -186,7 +203,7 @@ const joinRun = async (runId, userId) => {
 const leaveRun = async (runId, userId) => {
   // Vérifier que l'utilisateur est inscrit
   const [participants] = await db.query(
-    'SELECT * FROM participants WHERE id_run = ? AND id_user = ?',
+    'SELECT * FROM participer WHERE id_run = ? AND id_user = ?',
     [runId, userId]
   );
   
@@ -195,19 +212,60 @@ const leaveRun = async (runId, userId) => {
   }
   
   // Vérifier si l'utilisateur est l'organisateur
-  const [runs] = await db.query('SELECT id_organizer FROM runs WHERE id_run = ?', [runId]);
+  const [runs] = await db.query('SELECT id_user FROM runs WHERE id_run = ?', [runId]);
   
-  if (runs[0].id_organizer === userId) {
+  if (runs[0].id_user === userId) {
     throw new Error('L\'organisateur ne peut pas quitter sa propre course');
   }
   
-  // Supprimer la participation
+  // Mettre à jour le statut à 'cancelled' au lieu de supprimer
   await db.query(
-    'DELETE FROM participants WHERE id_run = ? AND id_user = ?',
+    'UPDATE participer SET status = "cancelled" WHERE id_run = ? AND id_user = ?',
     [runId, userId]
   );
   
   return { message: 'Vous avez quitté cette course avec succès' };
+};
+
+// Évaluer une course
+const rateRun = async (runId, userId, rating, comment) => {
+  // Vérifier que la course existe
+  const [runs] = await db.query('SELECT * FROM runs WHERE id_run = ?', [runId]);
+  if (runs.length === 0) {
+    throw new Error('Course non trouvée');
+  }
+  
+  // Vérifier que l'utilisateur a participé à la course
+  const [participation] = await db.query(
+    'SELECT * FROM participer WHERE id_run = ? AND id_user = ? AND status = "confirmed"',
+    [runId, userId]
+  );
+  
+  if (participation.length === 0) {
+    throw new Error('Vous devez avoir participé à la course pour pouvoir l\'évaluer');
+  }
+  
+  // Vérifier si l'utilisateur a déjà évalué cette course
+  const [existingRatings] = await db.query(
+    'SELECT * FROM rating_run WHERE id_run = ? AND id_user = ?',
+    [runId, userId]
+  );
+  
+  if (existingRatings.length > 0) {
+    // Mettre à jour l'évaluation existante
+    await db.query(
+      'UPDATE rating_run SET rating = ?, comment = ?, created_at = NOW() WHERE id_run = ? AND id_user = ?',
+      [rating, comment, runId, userId]
+    );
+  } else {
+    // Ajouter une nouvelle évaluation
+    await db.query(
+      'INSERT INTO rating_run (id_user, id_run, rating, comment) VALUES (?, ?, ?, ?)',
+      [userId, runId, rating, comment]
+    );
+  }
+  
+  return { message: 'Évaluation ajoutée avec succès' };
 };
 
 module.exports = {
@@ -215,5 +273,6 @@ module.exports = {
   getRuns,
   getRunById,
   joinRun,
-  leaveRun
+  leaveRun,
+  rateRun
 };

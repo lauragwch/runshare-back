@@ -1,5 +1,5 @@
 const express = require('express');
-const { createRun, getRuns, getRunById, joinRun, leaveRun } = require('../controllers/runController');
+const { createRun, getRuns, getRunById, joinRun, leaveRun, rateRun } = require('../controllers/runController');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -12,5 +12,6 @@ router.get('/:id', getRunById); // Accessible à tous, mais vérification pour l
 router.post('/', auth, createRun);
 router.post('/:id/join', auth, joinRun);
 router.delete('/:id/leave', auth, leaveRun);
+router.post('/:id/rate', auth, rateRun); // Nouvelle route pour évaluer une course
 
 module.exports = router;
