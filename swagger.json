@@ -373,15 +373,13 @@
             "schema": {
               "type": "object",
               "properties": {
-                "id_to_user": { "type": "integer", "description": "ID de l'utilisateur à évaluer" },
-                "id_run": { "type": "integer", "description": "ID de la course associée (optionnel)" },
+                "userId": { "type": "integer", "description": "ID de l'utilisateur à évaluer" },
                 "rating": { "type": "integer", "description": "Note de 1 à 5", "minimum": 1, "maximum": 5 },
                 "comment": { "type": "string", "description": "Commentaire" }
               },
-              "required": ["id_to_user", "rating"],
+              "required": ["userId", "rating"],
               "example": {
-                "id_to_user": 2,
-                "id_run": 5,
+                "userId": 2,
                 "rating": 4,
                 "comment": "Excellent partenaire de course !"
               }
@@ -470,7 +468,7 @@
                   "distance": { "type": "number" },
                   "level": { "type": "string" },
                   "is_private": { "type": "boolean" },
-                  "id_organizer": { "type": "integer" },
+                  "id_user": { "type": "integer" },
                   "organizer_name": { "type": "string" },
                   "organizer_picture": { "type": "string" },
                   "participants_count": { "type": "integer" }
@@ -566,7 +564,7 @@
                 "distance": { "type": "number" },
                 "level": { "type": "string" },
                 "is_private": { "type": "boolean" },
-                "id_organizer": { "type": "integer" },
+                "id_user": { "type": "integer" },
                 "organizer_name": { "type": "string" },
                 "organizer_picture": { "type": "string" },
                 "participants": {
@@ -590,10 +588,9 @@
                       "rating": { "type": "integer" },
                       "comment": { "type": "string" },
                       "created_at": { "type": "string", "format": "date-time" },
-                      "from_id": { "type": "integer" },
-                      "from_username": { "type": "string" },
-                      "to_id": { "type": "integer" },
-                      "to_username": { "type": "string" }
+                      "id_user": { "type": "integer" },
+                      "username": { "type": "string" },
+                      "profile_picture": { "type": "string" }
                     }
                   }
                 }
@@ -682,6 +679,65 @@
           },
           "400": {
             "description": "Non inscrit ou organisateur",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "401": {
+            "description": "Non authentifié",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          },
+          "404": {
+            "description": "Course non trouvée",
+            "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/runs/{id}/rate": {
+      "post": {
+        "tags": ["Courses"],
+        "summary": "Évalue une course",
+        "description": "Permet à un utilisateur de noter une course à laquelle il a participé",
+        "security": [
+          { "Bearer": [] }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "description": "ID de la course à évaluer"
+          },
+          {
+            "name": "ratingData",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "rating": { "type": "integer", "minimum": 1, "maximum": 5, "description": "Note de 1 à 5" },
+                "comment": { "type": "string", "description": "Commentaire (optionnel)" }
+              },
+              "required": ["rating"],
+              "example": {
+                "rating": 4,
+                "comment": "Très bonne course, bien organisée !"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Évaluation ajoutée avec succès",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "message": { "type": "string", "example": "Évaluation ajoutée avec succès" }
+              }
+            }
+          },
+          "400": {
+            "description": "Erreur de validation",
             "schema": { "type": "object", "properties": { "message": { "type": "string" } } }
           },
           "401": {

@@ -57,12 +57,11 @@ const updateProfilePicture = async (req, res) => {
 // Ajouter une évaluation à un utilisateur
 const rateUser = async (req, res) => {
   try {
-    const { id_to_user, id_run, rating, comment } = req.body;
-    const id_from_user = req.user.id_user;
+    const fromUserId = req.user.id_user;
+    const { userId, rating, comment } = req.body;
     
     // Appel du service pour ajouter l'évaluation
-    const result = await userService.rateUser(id_from_user, id_to_user, id_run, rating, comment);
-    
+    const result = await userService.rateUser(fromUserId, userId, rating, comment);
     res.status(201).json(result);
     
   } catch (error) {
