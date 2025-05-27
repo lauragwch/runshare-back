@@ -108,11 +108,54 @@ const updateUserRole = async (req, res) => {
   }
 };
 
+// Contrôleur pour le mot de passe oublié
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Email requis' });
+    }
+    
+    // Appel du service pour générer un token de réinitialisation
+    const result = await authService.forgotPassword(email);
+    
+    res.json({ message: 'Si cette adresse email est associée à un compte, un email de réinitialisation a été envoyé' });
+    
+  } catch (error) {
+    console.error('Erreur dans forgotPassword:', error.message);
+    // Pour des raisons de sécurité, on renvoie le même message même en cas d'erreur
+    res.json({ message: 'Si cette adresse email est associée à un compte, un email de réinitialisation a été envoyé' });
+  }
+};
+
+// Contrôleur pour réinitialiser le mot de passe
+const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: 'Token et nouveau mot de passe requis' });
+    }
+    
+    // Appel du service pour réinitialiser le mot de passe
+    const result = await authService.resetPassword(token, newPassword);
+    
+    res.json({ message: 'Mot de passe réinitialisé avec succès' });
+    
+  } catch (error) {
+    console.error('Erreur dans resetPassword:', error.message);
+    res.status(400).json({ message: error.message || 'Erreur lors de la réinitialisation du mot de passe' });
+  }
+};
+
 
 // Exportation des fonctions
 module.exports = {
   register,
   login,
   getProfile,
-  updateUserRole
+  updateUserRole,
+  forgotPassword,
+  resetPassword
 };

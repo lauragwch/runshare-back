@@ -2,6 +2,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/bdd');
 const ROLES = require('../constants/roles');
+const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 // Service pour inscrire un nouvel utilisateur
 const register = async (username, email, password, city, level, bio, role = ROLES.USER) => {
@@ -135,9 +137,106 @@ const updateUserRole = async (targetUserId, newRole, adminId) => {
   };
 };
 
+// Service pour la récupération de mot de passe
+const forgotPassword = async (email) => {
+  // Vérifier si l'utilisateur existe
+  const [users] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+  if (users.length === 0) {
+    // On ne veut pas révéler si l'email existe ou non, donc on simule un succès
+    return { success: true };
+  }
+  
+  const user = users[0];
+  
+  // Générer un token unique
+  const resetToken = crypto.randomBytes(20).toString('hex');
+  const resetTokenExpiry = Date.now() + 3600000; // 1 heure
+  
+  // Stocker le token en base de données (il est dans ma table password_resets)
+  await db.query(
+    'INSERT INTO password_resets (email, token, expiry) VALUES (?, ?, ?)',
+    [email, resetToken, new Date(resetTokenExpiry)]
+  );
+
+   // Envoyer un email avec le lien de réinitialisation
+  // Configuration de l'e-mail
+  const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: process.env.EMAIL_PORT,
+    secure: process.env.EMAIL_SECURE === 'true', // true pour 465, false pour les autres ports
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+
+  const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+  
+  const mailOptions = {
+    from: `"RunShare" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: 'Réinitialisation de votre mot de passe',
+    text: `Vous recevez cet e-mail car vous (ou quelqu'un d'autre) avez demandé la réinitialisation du mot de passe de votre compte.\n\n
+    Veuillez cliquer sur le lien suivant, ou copiez-le dans votre navigateur pour terminer le processus :\n\n
+    ${resetUrl}\n\n
+    Ce lien expirera dans 1 heure.\n\n
+    Si vous n'avez pas demandé cela, veuillez ignorer cet e-mail et votre mot de passe restera inchangé.`,
+    html: `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #48466d;">Réinitialisation de votre mot de passe RunShare</h2>
+      <p>Vous recevez cet e-mail car vous (ou quelqu'un d'autre) avez demandé la réinitialisation du mot de passe de votre compte.</p>
+      <p>Veuillez cliquer sur le bouton ci-dessous pour réinitialiser votre mot de passe :</p>
+      <a href="${resetUrl}" style="display: inline-block; background-color: #48466d; color: white; text-decoration: none; padding: 12px 24px; border-radius: 4px; margin: 20px 0;">Réinitialiser le mot de passe</a>
+      <p>Ce lien expirera dans 1 heure.</p>
+      <p>Si vous n'avez pas demandé cela, veuillez ignorer cet e-mail et votre mot de passe restera inchangé.</p>
+      <p style="color: #777; font-size: 0.8em; margin-top: 40px;">RunShare - Courez ensemble en toute sécurité</p>
+    </div>
+    `
+  };
+  
+  await transporter.sendMail(mailOptions);
+  
+  return { success: true };
+};
+
+// Service pour réinitialiser le mot de passe
+const resetPassword = async (token, newPassword) => {
+  // Vérifier si le token existe et n'est pas expiré
+  const [resets] = await db.query(
+    'SELECT * FROM password_resets WHERE token = ? AND expiry > NOW()',
+    [token]
+  );
+  
+  if (resets.length === 0) {
+    throw new Error('Token de réinitialisation invalide ou expiré');
+  }
+  
+  const reset = resets[0];
+  
+  // Hacher le nouveau mot de passe
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  
+  // Mettre à jour le mot de passe de l'utilisateur
+  await db.query(
+    'UPDATE users SET password = ? WHERE email = ?',
+    [hashedPassword, reset.email]
+  );
+  
+  // Supprimer le token de réinitialisation
+  await db.query(
+    'DELETE FROM password_resets WHERE token = ?',
+    [token]
+  );
+  
+   return { success: true };
+};
+
+
 module.exports = {
   register,
   login,
   getProfile,
-  updateUserRole
+  updateUserRole,
+  forgotPassword,
+  resetPassword
 };
