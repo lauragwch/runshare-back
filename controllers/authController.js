@@ -120,12 +120,36 @@ const forgotPassword = async (req, res) => {
     // Appel du service pour générer un token de réinitialisation
     const result = await authService.forgotPassword(email);
     
+    // Pour des raisons de sécurité, on renvoie le même message même si l'email n'existe pas
     res.json({ message: 'Si cette adresse email est associée à un compte, un email de réinitialisation a été envoyé' });
     
   } catch (error) {
     console.error('Erreur dans forgotPassword:', error.message);
     // Pour des raisons de sécurité, on renvoie le même message même en cas d'erreur
     res.json({ message: 'Si cette adresse email est associée à un compte, un email de réinitialisation a été envoyé' });
+  }
+};
+
+// Contrôleur pour vérifier le token
+const verifyToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+    
+    if (!token) {
+      return res.status(400).json({ message: 'Token requis' });
+    }
+    
+    // Vérifier le token
+    const tokenStatus = await authService.verifyResetToken(token);
+    
+    res.json({ valid: true });
+    
+  } catch (error) {
+    console.error('Erreur dans verifyToken:', error.message);
+    res.status(400).json({ 
+      valid: false,
+      message: 'Token invalide ou expiré'
+    });
   }
 };
 
@@ -149,13 +173,12 @@ const resetPassword = async (req, res) => {
   }
 };
 
-
-// Exportation des fonctions
 module.exports = {
   register,
   login,
   getProfile,
   updateUserRole,
   forgotPassword,
+  verifyToken,
   resetPassword
 };
