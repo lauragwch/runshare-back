@@ -127,11 +127,46 @@ const rateRun = async (req, res) => {
   }
 };
 
+const updateRun = async (req, res) => {
+  try {
+    const runId = req.params.id;
+    const userId = req.user.id_user;
+    const runData = req.body;
+    
+    // Appel du service pour modifier la course
+    const result = await runService.updateRun(runId, userId, runData);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Erreur dans updateRun :', error.message);
+    res.status(400).json({ message: error.message || 'Erreur lors de la modification de la course' });
+  }
+};
+
+const deleteRun = async (req, res) => {
+  try {
+    const runId = req.params.id;
+    const userId = req.user.id_user;
+    
+    // Appel du service pour supprimer la course
+    const result = await runService.deleteRun(runId, userId);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Erreur dans deleteRun :', error.message);
+    res.status(400).json({ message: error.message || 'Erreur lors de la suppression de la course' });
+  }
+};
+
 module.exports = {
   createRun,
   getRuns,
   getRunById,
   joinRun,
   leaveRun,
-  rateRun
+  rateRun,
+  updateRun,
+  deleteRun
 };

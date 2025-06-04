@@ -1,5 +1,5 @@
 const express = require('express');
-const { createRun, getRuns, getRunById, joinRun, leaveRun, rateRun } = require('../controllers/runController');
+const { createRun, getRuns, getRunById, joinRun, leaveRun, rateRun, updateRun, deleteRun } = require('../controllers/runController');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -10,6 +10,8 @@ router.get('/:id', getRunById); // Accessible à tous, mais vérification pour l
 
 // Routes protégées
 router.post('/', auth, createRun);
+router.put('/:id', auth, updateRun);
+router.delete('/:id', auth, deleteRun);
 router.post('/:id/join', auth, joinRun);
 router.delete('/:id/leave', auth, leaveRun);
 router.post('/:id/rate', auth, rateRun); // Nouvelle route pour évaluer une course

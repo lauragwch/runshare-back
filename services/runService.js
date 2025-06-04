@@ -1,34 +1,55 @@
 const db = require('../config/bdd');
 
+// Fonction utilitaire pour formater les dates SANS conversion UTC
+const formatDateForMySQL = (dateInput) => {
+  if (!dateInput) return null;
+  
+  // Si c'est déjà au format MySQL "YYYY-MM-DD HH:MM:SS"
+  if (typeof dateInput === 'string' && dateInput.includes(' ')) {
+    return dateInput;
+  }
+  
+  const date = new Date(dateInput);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:00`;
+};
+
 // Créer une nouvelle course
 const createRun = async (userId, runData) => {
   const { title, description, date, location, distance, level, is_private } = runData;
   
-  // Vérifier la date (pas dans le passé)
-  const runDate = new Date(date);
-  const now = new Date();
-  
-  if (runDate < now) {
-    throw new Error('La date de la course doit être future');
+  const formattedDate = formatDateForMySQL(date);
+  if (formattedDate) {
+    // Vérifier que la date n'est pas dans le passé
+    const runDateTime = new Date(formattedDate.replace(' ', 'T'));
+    const now = new Date();
+    if (runDateTime < now) {
+      throw new Error('La date de la course doit être future');
+    }
   }
 
   // Générer un ID unique pour la course
   const [maxIdResult] = await db.query('SELECT COALESCE(MAX(id_run), 0) + 1 as next_id FROM runs');
   const newRunId = maxIdResult[0].next_id;
   
-  // Insérer la course avec l'ID spécifique
+  // Insérer la course avec la date formatée
   await db.query(
     `INSERT INTO runs (id_run, title, description, date, location, distance, level, is_private, id_user)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [newRunId, title, description, date, location, distance, level, is_private ? 1 : 0, userId]
+    [newRunId, title, description, formattedDate, location, distance, level, is_private ? 1 : 0, userId]
   );
-  
+
   // L'organisateur est automatiquement participant
   await db.query(
     'INSERT INTO participer (id_user, id_run, status) VALUES (?, ?, "confirmed")',
     [userId, newRunId]
   );
-  
+
   return {
     message: 'Course créée avec succès',
     id_run: newRunId
@@ -199,6 +220,77 @@ const joinRun = async (runId, userId) => {
   return { message: 'Vous avez rejoint cette course avec succès' };
 };
 
+// Modifier une course
+const updateRun = async (runId, userId, runData) => {
+  const { title, description, date, location, distance, level, is_private } = runData;
+  
+  // Vérifier que la course existe et que l'utilisateur est l'organisateur
+  const [runs] = await db.query('SELECT * FROM runs WHERE id_run = ?', [runId]);
+  
+  if (runs.length === 0) {
+    throw new Error('Course non trouvée');
+  }
+  
+  if (runs[0].id_user !== userId) {
+    throw new Error('Vous n\'êtes pas autorisé à modifier cette course');
+  }
+  
+  const formattedDate = formatDateForMySQL(date);
+  if (formattedDate) {
+    // Vérifier que la date n'est pas dans le passé
+    const runDateTime = new Date(formattedDate.replace(' ', 'T'));
+    const now = new Date();
+    if (runDateTime < now) {
+      throw new Error('La date de la course doit être future');
+    }
+  }
+  
+  // Mettre à jour la course
+  await db.query(
+    `UPDATE runs SET 
+     title = COALESCE(?, title),
+     description = COALESCE(?, description),
+     date = COALESCE(?, date),
+     location = COALESCE(?, location),
+     distance = COALESCE(?, distance),
+     level = COALESCE(?, level),
+     is_private = COALESCE(?, is_private)
+     WHERE id_run = ?`,
+    [title, description, formattedDate, location, distance, level, is_private ? 1 : 0, runId]
+  );
+  
+  return {
+    message: 'Course modifiée avec succès'
+  };
+};
+
+// Supprimer une course
+const deleteRun = async (runId, userId) => {
+  // Vérifier que la course existe et que l'utilisateur est l'organisateur
+  const [runs] = await db.query('SELECT * FROM runs WHERE id_run = ?', [runId]);
+  
+  if (runs.length === 0) {
+    throw new Error('Course non trouvée');
+  }
+  
+  if (runs[0].id_user !== userId) {
+    throw new Error('Vous n\'êtes pas autorisé à supprimer cette course');
+  }
+  
+  // Supprimer d'abord les participations liées
+  await db.query('DELETE FROM participer WHERE id_run = ?', [runId]);
+  
+  // Supprimer les évaluations liées
+  await db.query('DELETE FROM rating_run WHERE id_run = ?', [runId]);
+  
+  // Supprimer la course
+  await db.query('DELETE FROM runs WHERE id_run = ?', [runId]);
+  
+  return {
+    message: 'Course supprimée avec succès'
+  };
+};
+
 // Quitter une course
 const leaveRun = async (runId, userId) => {
   // Vérifier que l'utilisateur est inscrit
@@ -274,5 +366,7 @@ module.exports = {
   getRunById,
   joinRun,
   leaveRun,
-  rateRun
+  rateRun,
+  updateRun,
+  deleteRun
 };
