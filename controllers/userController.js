@@ -70,9 +70,58 @@ const rateUser = async (req, res) => {
   }
 };
 
+// Récupérer tous les utilisateurs (admin)
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await userService.getAllUsers();
+    res.json(users);
+  } catch (error) {
+    console.error('Erreur dans getAllUsers :', error.message);
+    res.status(500).json({ message: 'Erreur lors de la récupération des utilisateurs' });
+  }
+};
+
+// Supprimer un utilisateur (admin)
+const deleteUser = async (req, res) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const adminId = req.user.id_user;
+    
+    const result = await userService.deleteUser(userId, adminId);
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur dans deleteUser :', error.message);
+    res.status(400).json({ message: error.message || 'Erreur lors de la suppression de l\'utilisateur' });
+  }
+};
+
+// Modifier le rôle d'un utilisateur (admin)
+const updateUserRole = async (req, res) => {
+  try {
+    const { userId, role } = req.body;
+    const adminId = req.user.id_user;
+    
+    if (!userId || !role) {
+      return res.status(400).json({ message: 'ID utilisateur et rôle requis' });
+    }
+    
+    // Utiliser la fonction existante dans authService
+    const authService = require('../services/authService');
+    const result = await authService.updateUserRole(userId, role, adminId);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur dans updateUserRole :', error.message);
+    res.status(400).json({ message: error.message || 'Erreur lors de la modification du rôle' });
+  }
+};
+
 module.exports = {
   getUserProfile,
   updateProfile,
   updateProfilePicture,
-  rateUser
+  rateUser,
+  getAllUsers,
+  deleteUser,
+  updateUserRole
 };

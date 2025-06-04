@@ -187,9 +187,54 @@ const rateUser = async (fromUserId, toUserId, rating, comment) => {
   }
 };
 
+// Récupérer tous les utilisateurs (admin seulement)
+const getAllUsers = async () => {
+  const [users] = await db.query(
+    `SELECT id_user, username, email, city, level, bio, profile_picture, role, created_at, updated_at
+     FROM users 
+     ORDER BY created_at DESC`
+  );
+  
+  return users;
+};
+
+// Supprimer un utilisateur (admin seulement)
+const deleteUser = async (userId, adminId) => {
+  // Vérifier que l'admin ne se supprime pas lui-même
+  if (userId === adminId) {
+    throw new Error('Vous ne pouvez pas supprimer votre propre compte');
+  }
+  
+  // Vérifier que l'utilisateur existe
+  const [users] = await db.query('SELECT * FROM users WHERE id_user = ?', [userId]);
+  if (users.length === 0) {
+    throw new Error('Utilisateur non trouvé');
+  }
+
+   // Supprimer les données liées en cascade
+  await db.query('DELETE FROM ratings WHERE id_user_donne = ? OR id_user_recu = ?', [userId, userId]);
+  await db.query('DELETE FROM rating_run WHERE id_user = ?', [userId]);
+  await db.query('DELETE FROM participer WHERE id_user = ?', [userId]);
+  
+  // Supprimer les courses organisées par cet utilisateur
+  const [userRuns] = await db.query('SELECT id_run FROM runs WHERE id_user = ?', [userId]);
+  for (let run of userRuns) {
+    await db.query('DELETE FROM participer WHERE id_run = ?', [run.id_run]);
+    await db.query('DELETE FROM rating_run WHERE id_run = ?', [run.id_run]);
+  }
+  await db.query('DELETE FROM runs WHERE id_user = ?', [userId]);
+  
+  // Supprimer l'utilisateur
+  await db.query('DELETE FROM users WHERE id_user = ?', [userId]);
+  
+  return { message: 'Utilisateur supprimé avec succès' };
+};
+
 module.exports = {
   getUserProfile,
   updateProfile,
   updateProfilePicture,
-  rateUser
+  rateUser,
+  getAllUsers,
+  deleteUser
 };

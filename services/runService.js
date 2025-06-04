@@ -360,6 +360,39 @@ const rateRun = async (runId, userId, rating, comment) => {
   return { message: 'Évaluation ajoutée avec succès' };
 };
 
+// Récupérer toutes les courses pour l'admin
+const getAllRunsForAdmin = async () => {
+  const [runs] = await db.query(
+    `SELECT r.*, u.username as organizer_name, u.profile_picture as organizer_picture,
+            COUNT(p.id_user) as participants_count
+     FROM runs r
+     JOIN users u ON r.id_user = u.id_user
+     LEFT JOIN participer p ON r.id_run = p.id_run AND p.status = 'confirmed'
+     GROUP BY r.id_run
+     ORDER BY r.date DESC`
+  );
+  
+  return runs;
+};
+
+// Supprimer une course (admin seulement)
+const deleteRunAsAdmin = async (runId) => {
+  // Vérifier que la course existe
+  const [runs] = await db.query('SELECT * FROM runs WHERE id_run = ?', [runId]);
+  if (runs.length === 0) {
+    throw new Error('Course non trouvée');
+  }
+  
+  // Supprimer les données liées
+  await db.query('DELETE FROM participer WHERE id_run = ?', [runId]);
+  await db.query('DELETE FROM rating_run WHERE id_run = ?', [runId]);
+  
+  // Supprimer la course
+  await db.query('DELETE FROM runs WHERE id_run = ?', [runId]);
+  
+  return { message: 'Course supprimée avec succès par l\'administrateur' };
+};
+
 module.exports = {
   createRun,
   getRuns,
@@ -368,5 +401,7 @@ module.exports = {
   leaveRun,
   rateRun,
   updateRun,
-  deleteRun
+  deleteRun,
+  getAllRunsForAdmin,
+  deleteRunAsAdmin
 };

@@ -160,6 +160,30 @@ const deleteRun = async (req, res) => {
   }
 };
 
+// Récupérer toutes les courses (admin)
+const getAllRunsForAdmin = async (req, res) => {
+  try {
+    const runs = await runService.getAllRunsForAdmin();
+    res.json(runs);
+  } catch (error) {
+    console.error('Erreur dans getAllRunsForAdmin :', error.message);
+    res.status(500).json({ message: 'Erreur lors de la récupération des courses' });
+  }
+};
+
+// Supprimer une course (admin)
+const deleteRunAsAdmin = async (req, res) => {
+  try {
+    const runId = req.params.id;
+    
+    const result = await runService.deleteRunAsAdmin(runId);
+    res.json(result);
+  } catch (error) {
+    console.error('Erreur dans deleteRunAsAdmin :', error.message);
+    res.status(400).json({ message: error.message || 'Erreur lors de la suppression de la course' });
+  }
+};
+
 module.exports = {
   createRun,
   getRuns,
@@ -168,5 +192,7 @@ module.exports = {
   leaveRun,
   rateRun,
   updateRun,
-  deleteRun
+  deleteRun,
+  getAllRunsForAdmin,
+  deleteRunAsAdmin
 };
