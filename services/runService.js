@@ -23,6 +23,7 @@ const formatDateForMySQL = (dateInput) => {
 const createRun = async (userId, runData) => {
   const { title, description, date, location, distance, level, is_private } = runData;
   
+  // Valider et formater la date
   const formattedDate = formatDateForMySQL(date);
   if (formattedDate) {
     // Vérifier que la date n'est pas dans le passé
@@ -118,6 +119,19 @@ const getRuns = async (filters, userId = null) => {
   
   const [runs] = await db.query(query, queryParams);
   
+  // ➕ CORRECTION : Pour chaque course, récupérer les participants
+  for (let run of runs) {
+    const [participants] = await db.query(
+      `SELECT p.status, p.joined_at, u.id_user, u.username, u.profile_picture
+       FROM participer p
+       JOIN users u ON p.id_user = u.id_user
+       WHERE p.id_run = ? AND p.status != 'cancelled'
+       ORDER BY p.status, p.joined_at`,
+      [run.id_run]
+    );
+    run.participants = participants;
+  }
+  
   return runs;
 };
 
@@ -206,14 +220,14 @@ const joinRun = async (runId, userId) => {
   if (cancelledParticipations.length > 0) {
     // Réactiver la participation
     await db.query(
-      'UPDATE participer SET status = "pending", joined_at = NOW() WHERE id_run = ? AND id_user = ?',
+      'UPDATE participer SET status = "confirmed", joined_at = NOW() WHERE id_run = ? AND id_user = ?',
       [runId, userId]
     );
   } else {
     // Inscrire l'utilisateur
     await db.query(
       'INSERT INTO participer (id_user, id_run, status) VALUES (?, ?, ?)',
-      [userId, runId, 'pending'] // Ou 'confirmed' si pas de validation nécessaire
+      [userId, runId, 'confirmed'] // ➕ CORRECTION : confirmed au lieu de pending
     );
   }
   
@@ -390,7 +404,7 @@ const deleteRunAsAdmin = async (runId) => {
   // Supprimer la course
   await db.query('DELETE FROM runs WHERE id_run = ?', [runId]);
   
-  return { message: 'Course supprimée avec succès par l\'administrateur' };
+  return { message: 'Course supprimée avec succès' };
 };
 
 module.exports = {

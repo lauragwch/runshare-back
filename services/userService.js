@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const getUserProfile = async (userId) => {
   // Récupérer les informations de base de l'utilisateur
   const [users] = await db.query(
-    'SELECT id_user, username, city, level, bio, profile_picture, created_at FROM users WHERE id_user = ?',
+    'SELECT id_user, username, email, city, level, bio, profile_picture, created_at FROM users WHERE id_user = ?',
     [userId]
   );
 
@@ -15,10 +15,10 @@ const getUserProfile = async (userId) => {
 
   const user = users[0];
 
-  // Récupérer les évaluations de l'utilisateur
+  // Récupérer les évaluations de cet utilisateur
   const [ratings] = await db.query(
-    `SELECT r.id_rating, r.rating, r.comment, r.created_at, 
-            u.id_user as from_user_id, u.username as from_username, u.profile_picture as from_profile_picture
+    `SELECT r.rating, r.comment, r.created_at, 
+            u.id_user as from_id, u.username as from_username, u.profile_picture as from_profile_picture
      FROM ratings r
      JOIN users u ON r.id_user_donne = u.id_user
      WHERE r.id_user_recu = ?
@@ -35,28 +35,39 @@ const getUserProfile = async (userId) => {
 
   // Récupérer les courses organisées par l'utilisateur
   const [organizedRuns] = await db.query(
-  `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level,
-   u.id_user as organizer_id, u.username as organizer_name, u.profile_picture as organizer_picture
-   FROM runs r
-   JOIN users u ON r.id_user = u.id_user
-   WHERE r.id_user = ?
-   ORDER BY r.date DESC
-   LIMIT 5`,
+    `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description,
+     u.id_user, u.username as organizer_name, u.profile_picture as organizer_picture,
+     COUNT(p.id_user) as participants_count
+     FROM runs r
+     JOIN users u ON r.id_user = u.id_user
+     LEFT JOIN participer p ON r.id_run = p.id_run AND p.status = 'confirmed'
+     WHERE r.id_user = ?
+     GROUP BY r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description, u.id_user, u.username, u.profile_picture
+     ORDER BY r.date DESC
+     LIMIT 10`,
     [userId]
   );
 
-  // Récupérer les courses auxquelles l'utilisateur participe
+  // ➕ CORRECTION COMPLÈTE : Récupérer les courses auxquelles l'utilisateur participe
   const [participatedRuns] = await db.query(
-  `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level,
-   u.id_user as organizer_id, u.username as organizer_name, u.profile_picture as organizer_picture
-   FROM runs r
-   JOIN participer p ON r.id_run = p.id_run
-   JOIN users u ON r.id_user = u.id_user
-   WHERE p.id_user = ? AND p.status = 'confirmed'
-   ORDER BY r.date DESC
-   LIMIT 5`,
-  [userId]
+    `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description,
+     r.id_user, u.username as organizer_name, u.profile_picture as organizer_picture,
+     COUNT(p2.id_user) as participants_count,
+     p.status as participation_status, p.joined_at
+     FROM runs r
+     JOIN participer p ON r.id_run = p.id_run
+     JOIN users u ON r.id_user = u.id_user
+     LEFT JOIN participer p2 ON r.id_run = p2.id_run AND p2.status = 'confirmed'
+     WHERE p.id_user = ? AND p.status = 'confirmed' AND r.id_user != ?
+     GROUP BY r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description, r.id_user, u.username, u.profile_picture, p.status, p.joined_at
+     ORDER BY r.date DESC
+     LIMIT 10`,
+    [userId, userId]
   );
+
+  console.log(`🔍 Debug getUserProfile pour user ${userId}:`);
+  console.log(`- Courses organisées trouvées: ${organizedRuns.length}`);
+  console.log(`- Participations trouvées: ${participatedRuns.length}`);
 
   return {
     ...user,
