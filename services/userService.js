@@ -8,13 +8,13 @@ const getUserProfile = async (userId) => {
     'SELECT id_user, username, city, level, bio, profile_picture, created_at FROM users WHERE id_user = ?',
     [userId]
   );
-  
+
   if (users.length === 0) {
     throw new Error('Utilisateur non trouvé');
   }
-  
+
   const user = users[0];
-  
+
   // Récupérer les évaluations de l'utilisateur
   const [ratings] = await db.query(
     `SELECT r.id_rating, r.rating, r.comment, r.created_at, 
@@ -25,37 +25,39 @@ const getUserProfile = async (userId) => {
      ORDER BY r.created_at DESC`,
     [userId]
   );
-  
+
   // Calcul de la note moyenne
   let averageRating = 0;
   if (ratings.length > 0) {
     const sum = ratings.reduce((total, rating) => total + rating.rating, 0);
     averageRating = sum / ratings.length;
   }
-  
+
   // Récupérer les courses organisées par l'utilisateur
   const [organizedRuns] = await db.query(
-    `SELECT id_run, title, date, location, distance, level
-     FROM runs
-     WHERE id_user = ?
-     ORDER BY date DESC
-     LIMIT 5`,
+  `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level,
+   u.id_user as organizer_id, u.username as organizer_name, u.profile_picture as organizer_picture
+   FROM runs r
+   JOIN users u ON r.id_user = u.id_user
+   WHERE r.id_user = ?
+   ORDER BY r.date DESC
+   LIMIT 5`,
     [userId]
   );
-  
+
   // Récupérer les courses auxquelles l'utilisateur participe
   const [participatedRuns] = await db.query(
-    `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level,
-            u.id_user as organizer_id, u.username as organizer_name
-     FROM runs r
-     JOIN participer p ON r.id_run = p.id_run
-     JOIN users u ON r.id_user = u.id_user
-     WHERE p.id_user = ? AND p.status = 'confirmed'
-     ORDER BY r.date DESC
-     LIMIT 5`,
-    [userId]
+  `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level,
+   u.id_user as organizer_id, u.username as organizer_name, u.profile_picture as organizer_picture
+   FROM runs r
+   JOIN participer p ON r.id_run = p.id_run
+   JOIN users u ON r.id_user = u.id_user
+   WHERE p.id_user = ? AND p.status = 'confirmed'
+   ORDER BY r.date DESC
+   LIMIT 5`,
+  [userId]
   );
-  
+
   return {
     ...user,
     averageRating,
@@ -68,58 +70,58 @@ const getUserProfile = async (userId) => {
 // Mettre à jour le profil d'un utilisateur
 const updateProfile = async (userId, userData) => {
   const { username, city, level, bio, password } = userData;
-  
+
   // Vérifier si le nom d'utilisateur est déjà pris (par un autre utilisateur)
   if (username) {
     const [existingUsers] = await db.query(
       'SELECT id_user FROM users WHERE username = ? AND id_user != ?',
       [username, userId]
     );
-    
+
     if (existingUsers.length > 0) {
       throw new Error('Ce nom d\'utilisateur est déjà pris');
     }
   }
-  
+
   // Préparer les champs à mettre à jour
   const updateFields = [];
   const values = [];
-  
+
   if (username) {
     updateFields.push('username = ?');
     values.push(username);
   }
-  
+
   if (city) {
     updateFields.push('city = ?');
     values.push(city);
   }
-  
+
   if (level) {
     updateFields.push('level = ?');
     values.push(level);
   }
-  
+
   if (bio !== undefined) {
     updateFields.push('bio = ?');
     values.push(bio);
   }
-  
+
   // S'il n'y a rien à mettre à jour et pas de mot de passe
   if (updateFields.length === 0 && !password) {
     throw new Error('Aucune donnée à mettre à jour');
   }
-  
+
   // Gérer le mot de passe séparément si fourni
   if (password) {
     const hashedPassword = await bcrypt.hash(password, 10);
     updateFields.push('password = ?');
     values.push(hashedPassword);
   }
-  
+
   // Ajouter l'ID utilisateur à la fin du tableau de valeurs
   values.push(userId);
-  
+
   // Mettre à jour les champs de base
   if (updateFields.length > 0) {
     await db.query(
@@ -127,7 +129,7 @@ const updateProfile = async (userId, userData) => {
       values
     );
   }
-  
+
   return { message: 'Profil mis à jour avec succès' };
 };
 
@@ -137,8 +139,8 @@ const updateProfilePicture = async (userId, profilePicturePath) => {
     'UPDATE users SET profile_picture = ? WHERE id_user = ?',
     [profilePicturePath, userId]
   );
-  
-  return { 
+
+  return {
     message: 'Photo de profil mise à jour avec succès',
     profilePicture: profilePicturePath
   };
@@ -150,25 +152,25 @@ const rateUser = async (fromUserId, toUserId, rating, comment) => {
   if (fromUserId === parseInt(toUserId)) {
     throw new Error('Vous ne pouvez pas vous auto-évaluer');
   }
-  
+
   // Vérifier que la note est entre 1 et 5
   if (rating < 1 || rating > 5) {
     throw new Error('La note doit être entre 1 et 5');
   }
-  
+
   // Vérifier si une évaluation existe déjà
   const [existingRatings] = await db.query(
     'SELECT id_rating FROM ratings WHERE id_user_donne = ? AND id_user_recu = ?',
     [fromUserId, toUserId]
   );
-  
+
   if (existingRatings.length > 0) {
     // Mettre à jour l'évaluation existante
     await db.query(
       'UPDATE ratings SET rating = ?, comment = ?, created_at = NOW() WHERE id_user_donne = ? AND id_user_recu = ?',
       [rating, comment, fromUserId, toUserId]
     );
-    
+
     return {
       message: 'Évaluation mise à jour avec succès',
       id_rating: existingRatings[0].id_rating
@@ -179,7 +181,7 @@ const rateUser = async (fromUserId, toUserId, rating, comment) => {
       'INSERT INTO ratings (rating, comment, id_user_recu, id_user_donne) VALUES (?, ?, ?, ?)',
       [rating, comment, toUserId, fromUserId]
     );
-    
+
     return {
       message: 'Évaluation ajoutée avec succès',
       id_rating: result.insertId
@@ -194,7 +196,7 @@ const getAllUsers = async () => {
      FROM users 
      ORDER BY created_at DESC`
   );
-  
+
   return users;
 };
 
@@ -204,18 +206,18 @@ const deleteUser = async (userId, adminId) => {
   if (userId === adminId) {
     throw new Error('Vous ne pouvez pas supprimer votre propre compte');
   }
-  
+
   // Vérifier que l'utilisateur existe
   const [users] = await db.query('SELECT * FROM users WHERE id_user = ?', [userId]);
   if (users.length === 0) {
     throw new Error('Utilisateur non trouvé');
   }
 
-   // Supprimer les données liées en cascade
+  // Supprimer les données liées en cascade
   await db.query('DELETE FROM ratings WHERE id_user_donne = ? OR id_user_recu = ?', [userId, userId]);
   await db.query('DELETE FROM rating_run WHERE id_user = ?', [userId]);
   await db.query('DELETE FROM participer WHERE id_user = ?', [userId]);
-  
+
   // Supprimer les courses organisées par cet utilisateur
   const [userRuns] = await db.query('SELECT id_run FROM runs WHERE id_user = ?', [userId]);
   for (let run of userRuns) {
@@ -223,10 +225,10 @@ const deleteUser = async (userId, adminId) => {
     await db.query('DELETE FROM rating_run WHERE id_run = ?', [run.id_run]);
   }
   await db.query('DELETE FROM runs WHERE id_user = ?', [userId]);
-  
+
   // Supprimer l'utilisateur
   await db.query('DELETE FROM users WHERE id_user = ?', [userId]);
-  
+
   return { message: 'Utilisateur supprimé avec succès' };
 };
 

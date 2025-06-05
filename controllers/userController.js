@@ -12,18 +12,18 @@ const getUserProfile = async (req, res) => {
     
   } catch (error) {
     console.error('Erreur dans getUserProfile :', error.message);
-    res.status(404).json({ message: error.message || 'Erreur lors de la récupération du profil' });
+    res.status(404).json({ message: error.message || 'Profil non trouvé' });
   }
 };
 
-// Mettre à jour son propre profil
+// Mettre à jour le profil de l'utilisateur connecté
 const updateProfile = async (req, res) => {
   try {
     const userId = req.user.id_user;
-    const { username, city, level, bio, password } = req.body;
+    const userData = req.body;
     
     // Appel du service pour mettre à jour le profil
-    const result = await userService.updateProfile(userId, { username, city, level, bio, password });
+    const result = await userService.updateProfile(userId, userData);
     
     res.json(result);
     
