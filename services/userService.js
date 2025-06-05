@@ -65,10 +65,6 @@ const getUserProfile = async (userId) => {
     [userId, userId]
   );
 
-  console.log(`🔍 Debug getUserProfile pour user ${userId}:`);
-  console.log(`- Courses organisées trouvées: ${organizedRuns.length}`);
-  console.log(`- Participations trouvées: ${participatedRuns.length}`);
-
   return {
     ...user,
     averageRating,
