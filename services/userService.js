@@ -165,6 +165,24 @@ const rateUser = async (fromUserId, toUserId, rating, comment) => {
     throw new Error('La note doit être entre 1 et 5');
   }
 
+  // ➕ NOUVEAU : Vérifier qu'ils ont participé ensemble à une course passée
+  const [sharedPastRuns] = await db.query(
+    `SELECT DISTINCT r.id_run, r.title, r.date
+     FROM runs r
+     JOIN participer p1 ON r.id_run = p1.id_run
+     JOIN participer p2 ON r.id_run = p2.id_run
+     WHERE p1.id_user = ? 
+       AND p2.id_user = ? 
+       AND p1.status = 'confirmed' 
+       AND p2.status = 'confirmed'
+       AND r.date < NOW()`,
+    [fromUserId, toUserId]
+  );
+
+  if (sharedPastRuns.length === 0) {
+    throw new Error('Vous ne pouvez évaluer cet utilisateur qu\'après avoir participé ensemble à une course terminée');
+  }
+
   // Vérifier si une évaluation existe déjà
   const [existingRatings] = await db.query(
     'SELECT id_rating FROM ratings WHERE id_user_donne = ? AND id_user_recu = ?',
@@ -194,6 +212,25 @@ const rateUser = async (fromUserId, toUserId, rating, comment) => {
       id_rating: result.insertId
     };
   }
+};
+
+// Fonction utilitaire pour récupérer les courses partagées passées
+const getSharedPastRuns = async (userId1, userId2) => {
+  const [sharedRuns] = await db.query(
+    `SELECT r.id_run, r.title, r.date, r.location
+     FROM runs r
+     JOIN participer p1 ON r.id_run = p1.id_run
+     JOIN participer p2 ON r.id_run = p2.id_run
+     WHERE p1.id_user = ? 
+       AND p2.id_user = ? 
+       AND p1.status = 'confirmed' 
+       AND p2.status = 'confirmed'
+       AND r.date < NOW()
+     ORDER BY r.date DESC`,
+    [userId1, userId2]
+  );
+
+  return sharedRuns;
 };
 
 // Récupérer tous les utilisateurs (admin seulement)
@@ -244,6 +281,7 @@ module.exports = {
   updateProfile,
   updateProfilePicture,
   rateUser,
+  getSharedPastRuns,
   getAllUsers,
   deleteUser
 };

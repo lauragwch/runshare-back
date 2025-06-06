@@ -341,6 +341,16 @@ const rateRun = async (runId, userId, rating, comment) => {
     throw new Error('Course non trouvée');
   }
   
+  const run = runs[0];
+  
+  // ➕ NOUVEAU : Vérifier que la date de la course est passée
+  const courseDate = new Date(run.date);
+  const now = new Date();
+  
+  if (courseDate > now) {
+    throw new Error('Vous ne pouvez évaluer une course qu\'après sa réalisation');
+  }
+  
   // Vérifier que l'utilisateur a participé à la course
   const [participation] = await db.query(
     'SELECT * FROM participer WHERE id_run = ? AND id_user = ? AND status = "confirmed"',
@@ -373,6 +383,7 @@ const rateRun = async (runId, userId, rating, comment) => {
   
   return { message: 'Évaluation ajoutée avec succès' };
 };
+
 
 // Récupérer toutes les courses pour l'admin
 const getAllRunsForAdmin = async () => {
