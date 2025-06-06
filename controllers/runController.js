@@ -122,7 +122,7 @@ const rateRun = async (req, res) => {
     res.status(201).json(result);
     
   } catch (error) {
-    console.error('Erreur dans rateRun :', error.message);
+    console.error('Erreur dans rateRun:', error.message);
     res.status(400).json({ message: error.message || 'Erreur lors de l\'évaluation de la course' });
   }
 };
