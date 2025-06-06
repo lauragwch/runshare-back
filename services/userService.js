@@ -1,11 +1,10 @@
 const db = require('../config/bdd');
-const bcrypt = require('bcryptjs');
 
-// Récupérer le profil public d'un utilisateur
+// Récupérer le profil d'un utilisateur
 const getUserProfile = async (userId) => {
   // Récupérer les informations de base de l'utilisateur
   const [users] = await db.query(
-    'SELECT id_user, username, email, city, level, bio, profile_picture, created_at FROM users WHERE id_user = ?',
+    'SELECT id_user, username, email, profile_picture, city, level, bio, created_at FROM users WHERE id_user = ?',
     [userId]
   );
 
@@ -15,10 +14,10 @@ const getUserProfile = async (userId) => {
 
   const user = users[0];
 
-  // Récupérer les évaluations de cet utilisateur
+  // Récupérer les évaluations reçues par cet utilisateur
   const [ratings] = await db.query(
     `SELECT r.rating, r.comment, r.created_at, 
-            u.id_user as from_id, u.username as from_username, u.profile_picture as from_profile_picture
+            u.id_user as from_user_id, u.username as from_username, u.profile_picture as from_profile_picture
      FROM ratings r
      JOIN users u ON r.id_user_donne = u.id_user
      WHERE r.id_user_recu = ?
@@ -33,7 +32,7 @@ const getUserProfile = async (userId) => {
     averageRating = sum / ratings.length;
   }
 
-  // Récupérer les courses organisées par l'utilisateur
+  // ➕ MODIFICATION : Récupérer TOUTES les courses organisées (passées ET futures)
   const [organizedRuns] = await db.query(
     `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description,
      u.id_user, u.username as organizer_name, u.profile_picture as organizer_picture,
@@ -48,7 +47,7 @@ const getUserProfile = async (userId) => {
     [userId]
   );
 
-  // ➕ CORRECTION COMPLÈTE : Récupérer les courses auxquelles l'utilisateur participe
+  // ➕ MODIFICATION : Récupérer TOUTES les courses auxquelles l'utilisateur participe (passées ET futures)
   const [participatedRuns] = await db.query(
     `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description,
      r.id_user, u.username as organizer_name, u.profile_picture as organizer_picture,
@@ -90,66 +89,60 @@ const updateProfile = async (userId, userData) => {
     }
   }
 
-  // Préparer les champs à mettre à jour
+  // Construire la requête de mise à jour dynamiquement
+  let updateQuery = 'UPDATE users SET ';
+  const updateParams = [];
   const updateFields = [];
-  const values = [];
 
   if (username) {
     updateFields.push('username = ?');
-    values.push(username);
+    updateParams.push(username);
   }
 
-  if (city) {
+  if (city !== undefined) {
     updateFields.push('city = ?');
-    values.push(city);
+    updateParams.push(city);
   }
 
   if (level) {
     updateFields.push('level = ?');
-    values.push(level);
+    updateParams.push(level);
   }
 
   if (bio !== undefined) {
     updateFields.push('bio = ?');
-    values.push(bio);
+    updateParams.push(bio);
   }
 
-  // S'il n'y a rien à mettre à jour et pas de mot de passe
-  if (updateFields.length === 0 && !password) {
+  if (password) {
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password, 10);
+    updateFields.push('password = ?');
+    updateParams.push(hashedPassword);
+  }
+
+  if (updateFields.length === 0) {
     throw new Error('Aucune donnée à mettre à jour');
   }
 
-  // Gérer le mot de passe séparément si fourni
-  if (password) {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    updateFields.push('password = ?');
-    values.push(hashedPassword);
-  }
+  updateQuery += updateFields.join(', ') + ' WHERE id_user = ?';
+  updateParams.push(userId);
 
-  // Ajouter l'ID utilisateur à la fin du tableau de valeurs
-  values.push(userId);
-
-  // Mettre à jour les champs de base
-  if (updateFields.length > 0) {
-    await db.query(
-      `UPDATE users SET ${updateFields.join(', ')} WHERE id_user = ?`,
-      values
-    );
-  }
+  await db.query(updateQuery, updateParams);
 
   return { message: 'Profil mis à jour avec succès' };
 };
 
 // Mettre à jour la photo de profil
-const updateProfilePicture = async (userId, profilePicturePath) => {
+const updateProfilePicture = async (userId, filePath) => {
   await db.query(
     'UPDATE users SET profile_picture = ? WHERE id_user = ?',
-    [profilePicturePath, userId]
+    [filePath, userId]
   );
 
   return {
     message: 'Photo de profil mise à jour avec succès',
-    profilePicture: profilePicturePath
+    profilePicture: filePath
   };
 };
 
@@ -236,30 +229,32 @@ const getSharedPastRuns = async (userId1, userId2) => {
 // Récupérer tous les utilisateurs (admin seulement)
 const getAllUsers = async () => {
   const [users] = await db.query(
-    `SELECT id_user, username, email, city, level, bio, profile_picture, role, created_at, updated_at
-     FROM users 
-     ORDER BY created_at DESC`
+    `SELECT id_user, username, email, profile_picture, city, level, role, created_at,
+            AVG(r.rating) as average_rating,
+            COUNT(DISTINCT runs.id_run) as organized_runs_count,
+            COUNT(DISTINCT p.id_run) as participated_runs_count
+     FROM users u
+     LEFT JOIN ratings r ON u.id_user = r.id_user_recu
+     LEFT JOIN runs ON u.id_user = runs.id_user
+     LEFT JOIN participer p ON u.id_user = p.id_user AND p.status = 'confirmed'
+     GROUP BY u.id_user
+     ORDER BY u.created_at DESC`
   );
 
   return users;
 };
 
 // Supprimer un utilisateur (admin seulement)
-const deleteUser = async (userId, adminId) => {
-  // Vérifier que l'admin ne se supprime pas lui-même
-  if (userId === adminId) {
-    throw new Error('Vous ne pouvez pas supprimer votre propre compte');
-  }
-
-  // Vérifier que l'utilisateur existe
-  const [users] = await db.query('SELECT * FROM users WHERE id_user = ?', [userId]);
-  if (users.length === 0) {
-    throw new Error('Utilisateur non trouvé');
-  }
-
-  // Supprimer les données liées en cascade
+const deleteUser = async (userId) => {
+  // Supprimer d'abord toutes les données liées
+  
+  // Supprimer les évaluations données et reçues
   await db.query('DELETE FROM ratings WHERE id_user_donne = ? OR id_user_recu = ?', [userId, userId]);
+  
+  // Supprimer les évaluations de courses
   await db.query('DELETE FROM rating_run WHERE id_user = ?', [userId]);
+  
+  // Supprimer les participations
   await db.query('DELETE FROM participer WHERE id_user = ?', [userId]);
 
   // Supprimer les courses organisées par cet utilisateur

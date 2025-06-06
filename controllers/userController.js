@@ -116,6 +116,23 @@ const updateUserRole = async (req, res) => {
   }
 };
 
+// Récupérer les courses partagées passées avec un utilisateur
+const getSharedPastRuns = async (req, res) => {
+  try {
+    const currentUserId = req.user.id_user;
+    const targetUserId = req.params.id;
+    
+    // Appel du service pour récupérer les courses partagées
+    const sharedRuns = await userService.getSharedPastRuns(currentUserId, targetUserId);
+    
+    res.json(sharedRuns);
+    
+  } catch (error) {
+    console.error('Erreur dans getSharedPastRuns :', error.message);
+    res.status(500).json({ message: 'Erreur lors de la récupération des courses partagées' });
+  }
+};
+
 module.exports = {
   getUserProfile,
   updateProfile,
@@ -123,5 +140,6 @@ module.exports = {
   rateUser,
   getAllUsers,
   deleteUser,
-  updateUserRole
+  updateUserRole,
+  getSharedPastRuns
 };

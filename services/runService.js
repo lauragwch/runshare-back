@@ -59,7 +59,7 @@ const createRun = async (userId, runData) => {
 
 // Récupérer toutes les courses (avec filtres)
 const getRuns = async (filters, userId = null) => {
-  const { city, date, level, distance, search } = filters;
+  const { city, date, level, distance, search, showPast = false } = filters;
   
   let query = `
     SELECT r.*, u.username as organizer_name, u.profile_picture as organizer_picture,
@@ -103,8 +103,10 @@ const getRuns = async (filters, userId = null) => {
     queryParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
   
-  // N'afficher que les courses à venir
-  query += ` AND r.date >= NOW()`;
+ // Filtre conditionnel pour les courses futures uniquement sur la page publique
+  if (!showPast) {
+    query += ` AND r.date >= NOW()`;
+  }
   
   // N'afficher que les courses publiques (sauf si l'utilisateur est connecté)
   if (!userId) {
@@ -119,7 +121,7 @@ const getRuns = async (filters, userId = null) => {
   
   const [runs] = await db.query(query, queryParams);
   
-  // ➕ CORRECTION : Pour chaque course, récupérer les participants
+  // Pour chaque course, récupérer les participants
   for (let run of runs) {
     const [participants] = await db.query(
       `SELECT p.status, p.joined_at, u.id_user, u.username, u.profile_picture
