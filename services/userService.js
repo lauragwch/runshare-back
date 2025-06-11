@@ -32,37 +32,32 @@ const getUserProfile = async (userId) => {
     averageRating = sum / ratings.length;
   }
 
-  // ➕ MODIFICATION : Récupérer TOUTES les courses organisées (passées ET futures)
+  // Récupérer TOUTES les courses organisées (passées ET futures)
   const [organizedRuns] = await db.query(
-    `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description,
-     u.id_user, u.username as organizer_name, u.profile_picture as organizer_picture,
-     COUNT(p.id_user) as participants_count
-     FROM runs r
-     JOIN users u ON r.id_user = u.id_user
-     LEFT JOIN participer p ON r.id_run = p.id_run AND p.status = 'confirmed'
-     WHERE r.id_user = ?
-     GROUP BY r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description, u.id_user, u.username, u.profile_picture
-     ORDER BY r.date DESC
-     LIMIT 10`,
-    [userId]
-  );
+     `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description,
+          u.id_user, u.username as organizer_name, u.profile_picture as organizer_picture,
+          (SELECT COUNT(*) FROM participer WHERE id_run = r.id_run AND status = 'confirmed') as participants_count
+   FROM runs r
+   JOIN users u ON r.id_user = u.id_user
+   WHERE r.id_user = ?
+   ORDER BY r.date DESC
+   LIMIT 10`,
+  [userId]
+);
 
-  // ➕ MODIFICATION : Récupérer TOUTES les courses auxquelles l'utilisateur participe (passées ET futures)
+  // Récupérer TOUTES les courses auxquelles l'utilisateur participe (passées ET futures)
   const [participatedRuns] = await db.query(
-    `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description,
-     r.id_user, u.username as organizer_name, u.profile_picture as organizer_picture,
-     COUNT(p2.id_user) as participants_count,
-     p.status as participation_status, p.joined_at
-     FROM runs r
-     JOIN participer p ON r.id_run = p.id_run
-     JOIN users u ON r.id_user = u.id_user
-     LEFT JOIN participer p2 ON r.id_run = p2.id_run AND p2.status = 'confirmed'
-     WHERE p.id_user = ? AND p.status = 'confirmed' AND r.id_user != ?
-     GROUP BY r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description, r.id_user, u.username, u.profile_picture, p.status, p.joined_at
-     ORDER BY r.date DESC
-     LIMIT 10`,
-    [userId, userId]
-  );
+  `SELECT r.id_run, r.title, r.date, r.location, r.distance, r.level, r.is_private, r.description,
+          r.id_user, u.username as organizer_name, u.profile_picture as organizer_picture,
+          (SELECT COUNT(*) FROM participer WHERE id_run = r.id_run AND status = 'confirmed') as participants_count
+   FROM runs r
+   JOIN participer p ON r.id_run = p.id_run
+   JOIN users u ON r.id_user = u.id_user
+   WHERE p.id_user = ? AND p.status = 'confirmed' AND r.id_user != ?
+   ORDER BY r.date DESC
+   LIMIT 10`,
+  [userId, userId]
+);
 
   return {
     ...user,
@@ -158,7 +153,7 @@ const rateUser = async (fromUserId, toUserId, rating, comment) => {
     throw new Error('La note doit être entre 1 et 5');
   }
 
-  // ➕ NOUVEAU : Vérifier qu'ils ont participé ensemble à une course passée
+  // Vérifier qu'ils ont participé ensemble à une course passée
   const [sharedPastRuns] = await db.query(
     `SELECT DISTINCT r.id_run, r.title, r.date
      FROM runs r
@@ -229,16 +224,9 @@ const getSharedPastRuns = async (userId1, userId2) => {
 // Récupérer tous les utilisateurs (admin seulement)
 const getAllUsers = async () => {
   const [users] = await db.query(
-    `SELECT id_user, username, email, profile_picture, city, level, role, created_at,
-            AVG(r.rating) as average_rating,
-            COUNT(DISTINCT runs.id_run) as organized_runs_count,
-            COUNT(DISTINCT p.id_run) as participated_runs_count
-     FROM users u
-     LEFT JOIN ratings r ON u.id_user = r.id_user_recu
-     LEFT JOIN runs ON u.id_user = runs.id_user
-     LEFT JOIN participer p ON u.id_user = p.id_user AND p.status = 'confirmed'
-     GROUP BY u.id_user
-     ORDER BY u.created_at DESC`
+    `SELECT id_user, username, email, profile_picture, city, level, role, created_at
+     FROM users
+     ORDER BY created_at DESC`
   );
 
   return users;
