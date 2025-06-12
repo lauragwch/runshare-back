@@ -31,6 +31,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/runs', require('./routes/runRoutes'));
+app.use('/api/messages', require('./routes/messageRoutes')); 
+
 
 // Route de base pour tester l'API
 app.get('/', (req, res) => {
