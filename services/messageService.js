@@ -1,18 +1,33 @@
 const db = require('../config/bdd');
 
-// Vérifier si deux utilisateurs peuvent communiquer (même logique que rateUser)
+// Vérifier si deux utilisateurs peuvent communiquer
 const canCommunicate = async (userId1, userId2) => {
+  // Cas 1 : Vérifier si un utilisateur est organisateur et l'autre participant de la même course
+  const [organizerParticipantRuns] = await db.query(
+    `SELECT DISTINCT r.id_run
+     FROM runs r
+     JOIN participer p ON r.id_run = p.id_run
+     WHERE ((r.id_user = ? AND p.id_user = ? AND p.status = 'confirmed') OR 
+            (r.id_user = ? AND p.id_user = ? AND p.status = 'confirmed'))`,
+    [userId1, userId2, userId2, userId1]
+  );
+  
+  // Si l'un est organisateur et l'autre participant, ils peuvent communiquer
+  if (organizerParticipantRuns.length > 0) {
+    return true;
+  }
+
+  // Cas 2 : Vérifier si les deux utilisateurs ont participé ensemble à une course terminée
   const [sharedRuns] = await db.query(
     `SELECT DISTINCT r.id_run
      FROM runs r
      JOIN participer p1 ON r.id_run = p1.id_run
      JOIN participer p2 ON r.id_run = p2.id_run
-     WHERE ((p1.id_user = ? AND p2.id_user = ?) OR 
-            (p1.id_user = ? AND p2.id_user = ?)) 
+     WHERE p1.id_user = ? AND p2.id_user = ?
        AND p1.status = 'confirmed' 
        AND p2.status = 'confirmed'
-       AND (r.id_user = ? OR r.id_user = ?)`,
-    [userId1, userId2, userId2, userId1, userId1, userId2]
+       AND r.date < NOW()`, 
+    [userId1, userId2]
   );
   
   return sharedRuns.length > 0;
@@ -23,7 +38,7 @@ const sendMessage = async (senderId, recipientId, content) => {
   // Vérifier que les utilisateurs peuvent communiquer
   const canSend = await canCommunicate(senderId, recipientId);
   if (!canSend) {
-    throw new Error('Vous ne pouvez contacter cet utilisateur qu\'après avoir participé ensemble à une course');
+    throw new Error('Vous ne pouvez contacter cet utilisateur qu\'après avoir participé ensemble à une course ou être participant/organisateur de la même course');
   }
 
   // Insérer le message
@@ -78,7 +93,7 @@ const getUserConversations = async (userId) => {
     [userId, userId, userId, userId]
   );
 
-    // Ajouter le dernier message pour chaque conversation
+  // Ajouter le dernier message pour chaque conversation
   for (let conv of conversations) {
     const [lastMsg] = await db.query(
       `SELECT content FROM messages 
