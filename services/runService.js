@@ -229,7 +229,7 @@ const joinRun = async (runId, userId) => {
     // Inscrire l'utilisateur
     await db.query(
       'INSERT INTO participer (id_user, id_run, status) VALUES (?, ?, ?)',
-      [userId, runId, 'confirmed'] // ➕ CORRECTION : confirmed au lieu de pending
+      [userId, runId, 'confirmed'] 
     );
   }
   
@@ -345,7 +345,7 @@ const rateRun = async (runId, userId, rating, comment) => {
   
   const run = runs[0];
   
-  // ➕ NOUVEAU : Vérifier que la date de la course est passée
+  // Vérifier que la date de la course est passée
   const courseDate = new Date(run.date);
   const now = new Date();
   
